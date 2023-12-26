@@ -1,0 +1,96 @@
+<!-- views/index.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RatonVSGato</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+  <script>
+    const map = L.map('map').setView([0, 0], 2);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    const socket = io();
+
+    // Al recibir la información inicial del usuario (rol y ubicación)
+    socket.on('init', ({ role, location }) => {
+      console.log(`You are a ${role}`);
+    });
+
+    // Manejar el evento para recibir la ubicación de otros usuarios y mostrar marcadores
+    socket.on('location', ({ userId, role, location }) => {
+      const iconSize = role === 'mouse' ? getTextSize(role) : [10, 10];
+
+      const icon = L.divIcon({
+        className: 'custom-icon',
+        html: `<img src="${getImageUrl(role)}" alt="${role}" class="user-image"><div class="label">${role}</div>`,
+        iconSize,
+        iconAnchor: [iconSize[0] / 2, iconSize[1] / 2],
+      });
+
+      // Eliminar el marcador anterior del mismo usuario
+      map.eachLayer((layer) => {
+        if (layer.options.userId === userId) {
+          map.removeLayer(layer);
+        }
+      });
+
+      L.marker(location, { icon, userId }).addTo(map);
+    });
+
+    // Manejar el evento para ser capturado
+    socket.on('captured', ({ captorRole }) => {
+      console.log(`You have been captured by a ${captorRole}`);
+    });
+
+    // Manejar el evento para recibir el resultado de la captura
+    socket.on('captureResult', ({ success, targetRole }) => {
+      if (success) {
+        console.log(`You successfully captured a ${targetRole}`);
+      } else {
+        console.log('Capture failed. The target is not within range.');
+      }
+    });
+
+    // Manejar el intento de captura
+    function tryCapture(targetUserId) {
+      socket.emit('tryCapture', targetUserId);
+    }
+
+    // Obtener la URL de la imagen según el rol
+    function getImageUrl(role) {
+      return role === 'mouse' ? '/images/mouse.png' : '/images/cat.png';
+    }
+
+    // Función para obtener el tamaño del texto en píxeles
+    function getTextSize(text) {
+      const container = document.createElement('div');
+      container.style.visibility = 'hidden';
+      container.style.position = 'absolute';
+      container.style.fontSize = '16px'; // Ajusta el tamaño de fuente base según sea necesario
+      container.textContent = text;
+
+      document.body.appendChild(container);
+      const size = {
+        width: container.offsetWidth,
+        height: container.offsetHeight,
+      };
+      document.body.removeChild(container);
+
+      return Math.max(size.width, size.height);
+    }
+  </script>
+</body>
+</html>
